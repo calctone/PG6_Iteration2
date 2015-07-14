@@ -21,7 +21,10 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 
-@interface DetailViewController : UIViewController<AVCaptureVideoDataOutputSampleBufferDelegate, RMCoreDelegate> {
+#import "YWeatherInfoDelegate.h"
+#import "YWeatherUtils.h"
+
+@interface DetailViewController : UIViewController<AVCaptureVideoDataOutputSampleBufferDelegate, RMCoreDelegate, YWeatherInfoDelegate> {
     
     AVCaptureSession *_session;
     AVCaptureDevice *_captureDevice;
@@ -37,6 +40,14 @@
 @property (weak, nonatomic) IBOutlet UILabel *detailDescriptionLabel;
 
 - (void)addGestureRecognizers;
+
+/* These methods return length==0 if the target string is not found. So, to check for containment: ([str rangeOfString:@"target"].length > 0).  Note that the length of the range returned by these methods might be different than the length of the target string, due composed characters and such.
+ */
+- (NSRange)rangeOfString:(NSString *)aString;
+- (NSRange)rangeOfString:(NSString *)aString options:(NSStringCompareOptions)mask;
+- (NSRange)rangeOfString:(NSString *)aString options:(NSStringCompareOptions)mask range:(NSRange)searchRange;
+- (NSRange)rangeOfString:(NSString *)aString options:(NSStringCompareOptions)mask range:(NSRange)searchRange locale:(NSLocale *)locale NS_AVAILABLE(10_5, 2_0);
+
 
 - (UIImage*)getUIImageFromIplImage:(IplImage *)iplImage;
 - (void)didCaptureIplImage:(IplImage *)iplImage :(NSString *)triggerImageURL;

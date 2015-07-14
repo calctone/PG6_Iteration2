@@ -51,16 +51,16 @@
 #define OFF @"OFF"
 #define ON @"ON"
 
-#define BURGLARY @"BURGLARY"
-#define THEFT @"THEFT"
-#define ROBBERY @"ROBBERY"
-#define ASSAULT @"ASSAULT"
-#define BREAKENTER @"BREAKING & ENTERING"
-#define ARSON @"ARSON"
-#define ARREST @"ARREST"
-#define VANDALISM @"VANDALISM"
-#define SHOOTING @"SHOOTING"
-#define OTHER @"OTHER"
+#define BURGLARY @"burglary"
+#define THEFT @"theft"
+#define ROBBERY @"robbery"
+#define ASSAULT @"assault"
+#define BREAKENTER @"breaking & entering"
+#define ARSON @"arson"
+#define ARREST @"arrest"
+#define VANDALISM @"vandalism"
+#define SHOOTING @"shooting"
+#define OTHER @"other"
 
 #define FORMAT(format, ...) [NSString stringWithFormat:(format), ##__VA_ARGS__]
 
@@ -72,6 +72,15 @@ dispatch_queue_t _socketQueue;
 GCDAsyncSocket *_listenSocket;
 NSMutableArray *_connectedSockets;
 BOOL isRunning;
+
+@implementation NSString (Contains)
+
+- (BOOL)myContainsString:(NSString*)other {
+    NSRange range = [self rangeOfString:other];
+    return range.length != 0;
+}
+
+@end
 
 @interface DetailViewController ()
 
@@ -181,6 +190,10 @@ BOOL isRunning;
     
     [self callMongoService];
     [self sendTwilioText:@"Hello, I'm Romo, give me something to do..."];
+    
+    YWeatherUtils* yweatherUtils = [YWeatherUtils getInstance];
+    [yweatherUtils setMAfterRecieveDataDelegate: self];
+    [yweatherUtils queryYahooWeather:@"Kansas%20City"];
     
     //self.Romo.emotion = RMCharacterEmotionCurious;
     //self.Romo.expression = RMCharacterExpressionSneeze;
@@ -454,57 +467,76 @@ BOOL isRunning;
         NSLog(@"JSON: %@", responseObject);
         NSArray *responses = responseObject;
         
+        int idx = 0;
         for (id object in responses) {
             NSDictionary* responseMap = object;
-            NSString* topicVal = [responseMap valueForKey:@"topTopics"];
+            NSString* topicVal = [[responseMap valueForKey:@"topTopics"] objectAtIndex:0];
             NSLog(@"Topic: %@", topicVal);
             
-            NSString* tweetVal = [responseMap valueForKey:@"topStatuses"];
+            NSString* tweetVal = [[responseMap valueForKey:@"topStatuses"] objectAtIndex:0];
             NSLog(@"Tweet: %@", tweetVal);
             
-            NSString* placeVal = [responseMap valueForKey:@"topPlaces"];
+            NSString* placeVal = [[responseMap valueForKey:@"topPlaces"] objectAtIndex:0];
             NSLog(@"Place: %@", placeVal);
             
+            if (idx == 30) {
+                NSLog(@"");
+            }
+            idx++;
+            
             NSString* message;
-            if ([tweetVal containsString:BURGLARY])
+            if ([tweetVal myContainsString:BURGLARY])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Burglary reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:THEFT])
+            else if ([tweetVal myContainsString:THEFT])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Theft reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:ROBBERY])
+            else if ([tweetVal myContainsString:ROBBERY])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Robbery reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:ASSAULT])
+            else if ([tweetVal myContainsString:ASSAULT])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Assault reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:BREAKENTER])
+            else if ([tweetVal myContainsString:BREAKENTER])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Breaking In reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:ARSON])
+            else if ([tweetVal myContainsString:ARSON])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Arson reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:ARREST])
+            else if ([tweetVal myContainsString:ARREST])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Arrest reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:VANDALISM])
+            else if ([tweetVal myContainsString:VANDALISM])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Vandalism reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:SHOOTING])
+            else if ([tweetVal myContainsString:SHOOTING])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Shooting reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
             }
-            else if ([tweetVal containsString:OTHER])
+            else if ([tweetVal myContainsString:OTHER])
             {
                 message = [NSString stringWithFormat:@"Alert from Romo! Other reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            
+            if (message != nil) {
+                // define the range you're interested in
+                NSRange stringRange = {0, MIN([message length], 160)};
+                
+                // adjust the range to include dependent chars
+                stringRange = [message rangeOfComposedCharacterSequencesForRange:stringRange];
+                
+                // Now you can create the short string
+                NSString *shortString = [message substringWithRange:stringRange];
+                
+                [self sendTwilioText:shortString];
             }
         }
     }
@@ -526,7 +558,7 @@ BOOL isRunning;
     NSString *kTwilioSID = @"AC58d6371746b89f7e0b89a52492fee638";
     NSString *kTwilioSecret = @"23613fd085a376bcfdbfe916118c6713";
     NSString *kFromNumber = @"+18163988624";
-    NSString *kToNumber = @"+1816"; //TODO PHONE NUMBER GOES HERE!
+    NSString *kToNumber = @"+18167198467";//@"+19137306622"; //TODO PHONE NUMBER GOES HERE!
     
     NSString *kMessage = [message stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
     
@@ -552,6 +584,52 @@ BOOL isRunning;
         NSString *receivedString = [[NSString alloc]initWithData:receivedData encoding:NSUTF8StringEncoding];
         NSLog(@"Request sent. %@", receivedString);
     }     
+}
+
+- (NSString*)gotWeatherInfo:(WeatherInfo *)weatherInfo {
+    NSMutableString* text = nil;
+    if (weatherInfo == nil) {
+        text = [NSMutableString stringWithString:YAHOO_WEATHER_ERROR];
+        return text;
+    }
+    text = [NSMutableString stringWithString:@""];
+    [text appendString:@"\n***Current Weather Info***\n"];
+    if ([self stringIsNonNilOrEmpty:weatherInfo.mCurrentText]) {
+        [text appendString:@"Condition: "];
+        [text appendString:weatherInfo.mCurrentText];
+        [text appendString:@"\n"];
+    }
+    if ([self stringIsNonNilOrEmpty:[NSString stringWithFormat: @"%d", weatherInfo.mCurrentTempC]]) {
+        [text appendString:[NSString stringWithFormat: @"%dºF", weatherInfo.mCurrentTempF]];
+        [text appendString:@"\n"];
+        [text appendString:[NSString stringWithFormat:@"Humidity: %@%%", weatherInfo.mAtmosphereHumidity]];
+        [text appendString:@"\n"];
+    }
+    [text appendString:@"\n"];
+    [text appendString:@"***Today's Forecast***\n"];
+    if ([self stringIsNonNilOrEmpty:weatherInfo.mForecast1Info.mForecastDate]) {
+        [text appendString:weatherInfo.mForecast1Info.mForecastDate];
+        [text appendString:@"\n"];
+    }
+    if ([self stringIsNonNilOrEmpty:[NSString stringWithFormat: @"%d", weatherInfo.mForecast1Info.mForecastTempLowC]]) {
+        [text appendString:[NSString stringWithFormat: @"Low: %dºF  High: %dºF", weatherInfo.mForecast1Info.mForecastTempLowF, weatherInfo.mForecast1Info.mForecastTempHighF]];
+        [text appendString:@"\n"];
+    }
+    if ([self stringIsNonNilOrEmpty:weatherInfo.mForecast1Info.mForecastText]) {
+        [text appendString:weatherInfo.mForecast1Info.mForecastText];
+        [text appendString:@"\n"];
+    }
+    
+    [self sendTwilioText:text];
+    
+    return text;
+}
+
+- (bool)stringIsNonNilOrEmpty:(NSString*)pString {
+    if (pString != nil && ![pString isEqualToString:@""]) {
+        return YES;
+    }
+    return NO;
 }
 
 - (void)socket:(GCDAsyncSocket *)sender didAcceptNewSocket:(GCDAsyncSocket *)newSocket
