@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- From: file:/Users/jeff/Documents/Virtual%20Machines.localized/Shared/SG3_Lab_3-master/SG3_Lab_3-master_Android_Client/app/src/main/res/values-w820dp/dimens.xml -->
+    <!-- From: file:/Users/jeff/Documents/Development/PG6_Android_Client/app/src/main/res/values-w820dp/dimens.xml -->
     <eat-comment/>
     <dimen name="activity_horizontal_margin">64dp</dimen>
 </resources>

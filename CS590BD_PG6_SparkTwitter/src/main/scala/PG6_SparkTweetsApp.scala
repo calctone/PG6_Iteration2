@@ -15,55 +15,83 @@ object PG6_SparkTweetsApp {
 
     // Set the system properties so that Twitter4j library used by twitter stream
     // can use them to generate OAuth credentials
-    /*System.setProperty("twitter4j.oauth.consumerKey", "K5irO3T6OnBimYiLwKI1aDPv0")
+    System.setProperty("twitter4j.oauth.consumerKey", "K5irO3T6OnBimYiLwKI1aDPv0")
     System.setProperty("twitter4j.oauth.consumerSecret", "sswoK3Dgjpr17AAUaWlQyfLdFpA0ENEs11wDoCQ2ahghcAaZvu")
     System.setProperty("twitter4j.oauth.accessToken", "3248175864-yiPSna2GQo0b3WHUSHPWeFl0kHjmb4zBPy648A4")
     System.setProperty("twitter4j.oauth.accessTokenSecret", "ZAVqYA8UTavzk0gg9I1ksthmq404LZtsoXvpbFuLBHJwr")
-*/
 
-    // Configure Twitter credentials using twitter.txt
-    PG6_ScalaHelper.configureTwitterCredentials()
-
-    //Create a spark configuration with a custom name and master
+    // Create a spark configuration with a custom name and master
     // For more master configuration see  https://spark.apache.org/docs/1.4.0/submitting-applications.html#master-urls
-    val sparkConf = new SparkConf().setAppName("STweetsApp").setMaster("local[*]")
+    val sparkConf = new SparkConf().setAppName("PG6_SparkTweetsApp").setMaster("local[*]")
 
     //Create a Streaming Context with 2 second window
     val ssc = new StreamingContext(sparkConf, Seconds(2))
 
-    /*
-    // Create DStream that will connect to hostname:port, like localhost:9999
-    val lines = ssc.socketTextStream("localhost", 9999)
-
-    // Split lines into words
-    val words = lines.flatMap(_.split(" "))
-
-    // Count each word in each batch
-    val pairs = words.map(word => (word, 1))
-    val wordCounts = pairs.reduceByKey(_ + _)
-
-    // Print the first ten elements of each RDD generated in this DStream to the console
-    wordCounts.print()
-
-    ssc.start()
-    ssc.awaitTermination()
-  }
-    */
-
-    //Using the streaming context, open a twitter stream (By the way you can also use filters)
-    //Stream generates a series of random tweets
+    // Using the streaming context, open a twitter stream (By the way you can also use filters)
+    // Stream generates a series of random tweets
     val stream = TwitterUtils.createStream(ssc, None, filters)
 
-    //Map : Retrieving Hash Tags
-    val hashTags = stream.flatMap(status => status.getText.split(" ").filter(_.startsWith("#")))
+    var jsonTopics = Array[String]()
+    var jsonStatuses = Array[String]()
+    var jsonPlaces = Array[String]()
 
-    //Finding the top hash Tgas on 10 second window
+    // Map : Statuses
+    val statuses = stream.map(status => status.getText())
+    statuses.print()
+
+    val topStatuses10 = statuses.map((_, 1)).reduceByKeyAndWindow(_ + _, Seconds(10))
+      .map { case (tweet, count) => (count, tweet) }
+      .transform(_.sortByKey(false))
+
+    // Finding the top Statuses on 10 second window
+    topStatuses10.foreachRDD(rdd => {
+      jsonStatuses = Array[String]()
+      val topList = rdd.take(10)
+      println("\nPopular Statuses in last 10 seconds (%s total):".format(rdd.count()))
+      topList.foreach { case (count, tag) => println("%s (%s statuses)".format(tag, count)) }
+
+      topList.foreach {
+        case (count, tag) =>
+          val jsonStatus = """%s: """.format(tag) + """%s (statuses)""".format(count)
+          jsonStatuses = jsonStatuses :+ jsonStatus
+      }
+    })
+
+    // Map : Places
+    val places = stream.map(place => place.getPlace())
+    places.print()
+
+    val topPlaces10 = places.map((_, 1)).reduceByKeyAndWindow(_ + _, Seconds(10))
+      .map { case (place, count) => (count, place) }
+      .transform(_.sortByKey(false))
+
+    // Finding the top Places on 10 second window
+    topPlaces10.foreachRDD(rdd => {
+      jsonPlaces = Array[String]()
+      val topList = rdd.take(10)
+      println("\nPopular Places in last 10 seconds (%s total):".format(rdd.count()))
+      topList.foreach { case (count, tag) => println("%s (%s places)".format(tag, count)) }
+
+      topList.foreach {
+        case (count, tag) =>
+          val jsonPlace = """%s: """.format(tag) + """%s (places)""".format(count)
+          jsonPlaces = jsonPlaces :+ jsonPlace
+      }
+    })
+
+    // Map : Words
+    val words = stream.flatMap(word => word.getText.split(" "))
+
+    // Map : Retrieving Hash Tags
+    val hashTags = words.filter(_.startsWith("#"))
+
+    // Finding the top hash Tags on 10 second window
     val topCounts10 = hashTags.map((_, 1)).reduceByKeyAndWindow(_ + _, Seconds(10))
       .map { case (topic, count) => (count, topic) }
       .transform(_.sortByKey(false))
 
     topCounts10.foreachRDD(rdd => {
-      var jsonTopics = Array[String]()
+      jsonTopics = Array[String]()
       val topList = rdd.take(10)
       println("\nPopular topics in last 10 seconds (%s total):".format(rdd.count()))
       topList.foreach { case (count, tag) => println("%s (%s tweets)".format(tag, count)) }
@@ -76,21 +104,47 @@ object PG6_SparkTweetsApp {
 
       if (!jsonTopics.isEmpty) {
 
-        var jsonItems = ""
-        var index = 1
+        var jsonTopicItems = ""
+        var topicsIdx = 1
         jsonTopics.foreach {
           case (topic) =>
-            jsonItems += topic
-            if (index < jsonTopics.length) {
-              jsonItems += ","
+            jsonTopicItems += topic
+            if (topicsIdx < jsonTopics.length) {
+              jsonTopicItems += ","
             }
-            println("\nIndex: " + index + " Size: " + jsonTopics.length)
-            index += 1
+            topicsIdx += 1
         }
 
-        val jsonHeaders = """{"topTopics":[""".concat( """"""").concat(jsonItems).concat( """"""").concat( """]}""")
-        println("\nTWITTER DATA: %s".format(jsonHeaders))
-        //val jsonHeaders = """{"jsonrpc": "2.0", "method": "someMethod", "params": {"dataIds":["12348" , "456"]}, "data2": "777"}"""
+        var jsonStatusItems = ""
+        if (!jsonStatuses.isEmpty) {
+          var statusIdx = 1
+          jsonStatuses.foreach {
+            case (status) =>
+              jsonStatusItems += status
+              if (statusIdx < jsonStatuses.length) {
+                jsonStatusItems += ","
+              }
+              statusIdx += 1
+          }
+        }
+
+        var jsonPlaceItems = ""
+        if (!jsonPlaces.isEmpty) {
+          var placeIdx = 1
+          jsonPlaces.foreach {
+            case (place) =>
+              jsonPlaceItems += place
+              if (placeIdx < jsonPlaces.length) {
+                jsonPlaceItems += ","
+              }
+              placeIdx += 1
+          }
+        }
+
+        val jsonHeaders = """{"topTopics":[""".concat( """"""").concat(jsonTopicItems).concat( """"""").concat( """]""")
+                  .concat(""","topStatuses":[""").concat( """"""").concat(jsonStatusItems).concat( """"""").concat( """]""")
+                  .concat(""","topPlaces":[""").concat( """"""").concat(jsonPlaceItems).concat( """"""").concat( """]}""")
+        println("\nTwitter Data Request to MongoDB: %s".format(jsonHeaders))
 
         val url = "https://api.mongolab.com/api/1/databases/cs590_sg3/collections/TwitterData?apiKey=j-xyG_r8AOd5fKxRNNGlmsS9vradUXAU"
         val result = Http(url).postData(jsonHeaders)

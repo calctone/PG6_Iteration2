@@ -65,6 +65,9 @@
 		1F24C26E1B53036B0041D611 /* traffic-sign-slow-down.bmp in Resources */ = {isa = PBXBuildFile; fileRef = 1F24C2681B53036B0041D611 /* traffic-sign-slow-down.bmp */; };
 		1F24C26F1B53036B0041D611 /* traffic-sign-turn-left.bmp in Resources */ = {isa = PBXBuildFile; fileRef = 1F24C2691B53036B0041D611 /* traffic-sign-turn-left.bmp */; };
 		1F24C2701B53036B0041D611 /* traffic-sign-turn-right.bmp in Resources */ = {isa = PBXBuildFile; fileRef = 1F24C26A1B53036B0041D611 /* traffic-sign-turn-right.bmp */; };
+		1F24C2741B53F5970041D611 /* libcrypto.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F24C2711B53F5970041D611 /* libcrypto.a */; };
+		1F24C2751B53F5970041D611 /* libssl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F24C2721B53F5970041D611 /* libssl.a */; };
+		1F24C2761B53F5970041D611 /* libTwilioClient.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F24C2731B53F5970041D611 /* libTwilioClient.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -173,6 +176,15 @@
 		1F24C2681B53036B0041D611 /* traffic-sign-slow-down.bmp */ = {isa = PBXFileReference; lastKnownFileType = image.bmp; path = "traffic-sign-slow-down.bmp"; sourceTree = "<group>"; };
 		1F24C2691B53036B0041D611 /* traffic-sign-turn-left.bmp */ = {isa = PBXFileReference; lastKnownFileType = image.bmp; path = "traffic-sign-turn-left.bmp"; sourceTree = "<group>"; };
 		1F24C26A1B53036B0041D611 /* traffic-sign-turn-right.bmp */ = {isa = PBXFileReference; lastKnownFileType = image.bmp; path = "traffic-sign-turn-right.bmp"; sourceTree = "<group>"; };
+		1F24C2711B53F5970041D611 /* libcrypto.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libcrypto.a; sourceTree = "<group>"; };
+		1F24C2721B53F5970041D611 /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libssl.a; sourceTree = "<group>"; };
+		1F24C2731B53F5970041D611 /* libTwilioClient.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libTwilioClient.a; sourceTree = "<group>"; };
+		1F24C2791B53F6950041D611 /* TCConnection.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TCConnection.h; sourceTree = "<group>"; };
+		1F24C27A1B53F6950041D611 /* TCConnectionDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TCConnectionDelegate.h; sourceTree = "<group>"; };
+		1F24C27B1B53F6950041D611 /* TCDevice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TCDevice.h; sourceTree = "<group>"; };
+		1F24C27C1B53F6950041D611 /* TCDeviceDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TCDeviceDelegate.h; sourceTree = "<group>"; };
+		1F24C27D1B53F6950041D611 /* TCPresenceEvent.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TCPresenceEvent.h; sourceTree = "<group>"; };
+		1F24C27E1B53F6950041D611 /* TwilioClient.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TwilioClient.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -186,8 +198,10 @@
 				1F24C1F61B52F98A0041D611 /* ExternalAccessory.framework in Frameworks */,
 				1F24C1F41B52F9830041D611 /* Security.framework in Frameworks */,
 				1F24C2091B52F9D80041D611 /* RMCore.framework in Frameworks */,
+				1F24C2761B53F5970041D611 /* libTwilioClient.a in Frameworks */,
 				1F24C1F21B52F97D0041D611 /* QuartzCore.framework in Frameworks */,
 				1F24C1F01B52F9760041D611 /* UIKit.framework in Frameworks */,
+				1F24C2741B53F5970041D611 /* libcrypto.a in Frameworks */,
 				1F24C1EE1B52F96F0041D611 /* MessageUI.framework in Frameworks */,
 				1F24C1EB1B52F9680041D611 /* AVFoundation.framework in Frameworks */,
 				1F24C1EC1B52F9680041D611 /* Foundation.framework in Frameworks */,
@@ -196,6 +210,7 @@
 				1F24C1E61B52F9550041D611 /* CoreMedia.framework in Frameworks */,
 				1F24C1E71B52F9550041D611 /* CoreMotion.framework in Frameworks */,
 				1F24C1E81B52F9550041D611 /* CoreTelephony.framework in Frameworks */,
+				1F24C2751B53F5970041D611 /* libssl.a in Frameworks */,
 				1F24C2081B52F9D80041D611 /* RMCharacter.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -278,6 +293,10 @@
 		1F24C1DE1B52F9240041D611 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				1F24C2771B53F68B0041D611 /* Twilio */,
+				1F24C2711B53F5970041D611 /* libcrypto.a */,
+				1F24C2721B53F5970041D611 /* libssl.a */,
+				1F24C2731B53F5970041D611 /* libTwilioClient.a */,
 				1F24C2561B52FA0D0041D611 /* opencv2.framework */,
 				1F24C2391B52F9FC0041D611 /* AFNetworking */,
 				1F24C20A1B52F9F30041D611 /* STTwitter */,
@@ -389,6 +408,27 @@
 				1F24C26A1B53036B0041D611 /* traffic-sign-turn-right.bmp */,
 			);
 			name = Objects;
+			sourceTree = "<group>";
+		};
+		1F24C2771B53F68B0041D611 /* Twilio */ = {
+			isa = PBXGroup;
+			children = (
+				1F24C2781B53F6950041D611 /* Headers */,
+			);
+			name = Twilio;
+			sourceTree = "<group>";
+		};
+		1F24C2781B53F6950041D611 /* Headers */ = {
+			isa = PBXGroup;
+			children = (
+				1F24C2791B53F6950041D611 /* TCConnection.h */,
+				1F24C27A1B53F6950041D611 /* TCConnectionDelegate.h */,
+				1F24C27B1B53F6950041D611 /* TCDevice.h */,
+				1F24C27C1B53F6950041D611 /* TCDeviceDelegate.h */,
+				1F24C27D1B53F6950041D611 /* TCPresenceEvent.h */,
+				1F24C27E1B53F6950041D611 /* TwilioClient.h */,
+			);
+			path = Headers;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -663,6 +703,10 @@
 				);
 				INFOPLIST_FILE = PG6_NightBot_Romo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -680,6 +724,10 @@
 				);
 				INFOPLIST_FILE = PG6_NightBot_Romo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

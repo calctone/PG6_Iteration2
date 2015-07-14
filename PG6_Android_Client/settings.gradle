@@ -1,1 +1,1 @@
-include ':app'
+include ':app', ':jahmm-0.6.1'

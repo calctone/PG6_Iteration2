@@ -18,6 +18,7 @@ public final class R {
         public static final int ic_launcher=0x7f020000;
     }
     public static final class id {
+        public static final int acceleration=0x7f070014;
         public static final int address=0x7f070000;
         public static final int buttonDNE=0x7f070010;
         public static final int buttonFaster=0x7f07000a;

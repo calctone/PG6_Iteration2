@@ -195,4 +195,13 @@
         android:layout_toRightOf="@+id/buttonRightSign"
         android:layout_toEndOf="@+id/buttonRightSign" />
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Direction"
+        android:id="@+id/acceleration"
+        android:layout_alignTop="@+id/response"
+        android:layout_alignLeft="@+id/buttonRightSign"
+        android:layout_alignStart="@+id/buttonRightSign" />
+
 </RelativeLayout>

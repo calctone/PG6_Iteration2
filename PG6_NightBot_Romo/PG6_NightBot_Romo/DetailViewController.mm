@@ -21,6 +21,7 @@
 #import "GCDAsyncSocket.h"
 
 #define BASE_URL "http://nlpservices.mybluemix.net/api/service"
+#define MONGO_URL "https://api.mongolab.com/api/1/databases/cs590_sg3/collections/TwitterData"
 
 #define WELCOME_MSG  0
 #define ECHO_MSG     1
@@ -38,11 +39,39 @@
 #define LAUGH @"LAUGH"
 #define SPEED @"SPEED"
 
+#define FASTER @"FASTER"
+#define SLOWER @"SLOWER"
+#define STOPSIGN @"STOPSIGN"
+#define GOSIGN @"GOSIGN"
+#define LEFTSIGN @"LEFTSIGN"
+#define RIGHTSIGN @"RIGHTSIGN"
+#define SLOWSIGN @"SLOWSIGN"
+#define DNESIGN @"DNESIGN"
+#define TWEET @"TWEET"
+#define OFF @"OFF"
+#define ON @"ON"
+
+#define BURGLARY @"BURGLARY"
+#define THEFT @"THEFT"
+#define ROBBERY @"ROBBERY"
+#define ASSAULT @"ASSAULT"
+#define BREAKENTER @"BREAKING & ENTERING"
+#define ARSON @"ARSON"
+#define ARREST @"ARREST"
+#define VANDALISM @"VANDALISM"
+#define SHOOTING @"SHOOTING"
+#define OTHER @"OTHER"
+
 #define FORMAT(format, ...) [NSString stringWithFormat:(format), ##__VA_ARGS__]
 
 double currentMaxRotX;
 double currentMaxRotY;
 double currentMaxRotZ;
+
+dispatch_queue_t _socketQueue;
+GCDAsyncSocket *_listenSocket;
+NSMutableArray *_connectedSockets;
+BOOL isRunning;
 
 @interface DetailViewController ()
 
@@ -74,6 +103,7 @@ double currentMaxRotZ;
 @property (strong, nonatomic) NSString *turnLeft;
 @property (strong, nonatomic) NSString *turnRight;
 @property (strong, nonatomic) NSString *slowDown;
+@property (strong, nonatomic) NSString *activeSign;
 
 @property (strong, nonatomic) NSMutableArray *signs;
 @property (nonatomic, assign) int signIdx;
@@ -130,6 +160,56 @@ double currentMaxRotZ;
     // To receive messages when Robots connect & disconnect, set RMCore's delegate to self
     [RMCore setDelegate:self];
     
+    NSString *ipAddress = [self getIPAddress];
+    [self logInfo:@"The iOS Device IP Address is..."];
+    [self logInfo:ipAddress];
+    
+    _socketQueue = dispatch_queue_create("socketQueue", NULL);
+    _listenSocket = [[GCDAsyncSocket alloc] initWithDelegate:self delegateQueue:_socketQueue];
+    _connectedSockets = [[NSMutableArray alloc] initWithCapacity:1];
+    isRunning = NO;
+    
+    NSError *error = nil;
+    if (![_listenSocket acceptOnPort:1234 error:&error])
+    {
+        NSLog(@"Error accepting listen socket on port: %@", error);
+    }
+    
+    isRunning = YES;
+    
+    _activeSign = _stop;
+    
+    [self callMongoService];
+    [self sendTwilioText:@"Hello, I'm Romo, give me something to do..."];
+    
+    //self.Romo.emotion = RMCharacterEmotionCurious;
+    //self.Romo.expression = RMCharacterExpressionSneeze;
+    
+    /** COMMENT OUT LOGGING PURPOSE ONLY **/
+    /*
+     AppDelegate *appDelegate = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+     
+     self.motionManager = [appDelegate sharedMotionManager];
+     self.motionManager.gyroUpdateInterval = 0.3;
+     self.motionManager.magnetometerUpdateInterval = 0.3;
+     self.motionManager.accelerometerUpdateInterval = 0.3;
+     self.motionManager.deviceMotionUpdateInterval = 0.3;
+     
+     self.isBeginning = true;
+     self.isClimbing = false;
+     self.isOnTop = false;
+     self.isDescending = false;
+     self.isEnding = false;
+     
+     [self.motionManager startGyroUpdatesToQueue:[NSOperationQueue currentQueue] withHandler:^(CMGyroData *gyroData, NSError *error) {
+     [self outputRotationData:gyroData.rotationRate];
+     }];
+     
+     [self.motionManager startDeviceMotionUpdatesToQueue:[NSOperationQueue currentQueue] withHandler:^(CMDeviceMotion *motion, NSError *error) {
+     [self processMotion:motion];
+     }];
+     */
+    
     [self configureView];
 }
 
@@ -144,7 +224,6 @@ double currentMaxRotZ;
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
 }
-
 
 - (void)doNothing
 {
@@ -168,7 +247,7 @@ double currentMaxRotZ;
             NSLog(@"Is Beginning...");
             [self.Romo3 driveForwardWithSpeed:0.40];
             self.Romo.emotion = RMCharacterEmotionExcited;
-            //self.Romo.expression = RMCharacterExpressionExcited;
+            self.Romo.expression = RMCharacterExpressionExcited;
         }
         // 3. Romo is on top...
         else if (self.isBeginning == false && self.isClimbing == true)
@@ -178,26 +257,14 @@ double currentMaxRotZ;
             self.isOnTop = true;
             
             [self.Romo3 driveForwardWithSpeed:0.25];
-            [NSTimer scheduledTimerWithTimeInterval:.5 target:self selector:@selector(doNothing) userInfo:nil repeats:NO];
-            //[self performSelector:@selector(doNothing) withObject:nil afterDelay:0.5 ];
-            
-            //[self.motionManager stopDeviceMotionUpdates];
             
             [self.Romo3 stopDriving];
             self.Romo.emotion = RMCharacterEmotionSleepy;
-            //self.Romo.expression = RMCharacterExpressionYippee;
+            self.Romo.expression = RMCharacterExpressionYippee;
             
             // Call NLP Service and Tweet message!
             [self callNLPService];
             [self.Romo3 driveForwardWithSpeed:0.25];
-            
-            [NSTimer scheduledTimerWithTimeInterval:5.0 target:self selector:@selector(doNothing) userInfo:nil repeats:NO];
-            //[self performSelector:@selector(doNothing) withObject:nil afterDelay:5.0 ];
-            
-            
-            /*[self.motionManager startDeviceMotionUpdatesToQueue:[NSOperationQueue currentQueue] withHandler:^(CMDeviceMotion *motion, NSError *error) {
-             [self processMotion:motion];
-             }];*/
         }
         // 5. Romo is at the finish line...
         else if (self.isDescending == true)
@@ -207,12 +274,17 @@ double currentMaxRotZ;
             self.isEnding = true;
             
             [self.Romo3 driveForwardWithSpeed:0.30];
+            
             self.Romo.emotion = RMCharacterEmotionExcited;
             self.Romo.expression = RMCharacterExpressionWee;
-            [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(doNothing) userInfo:nil repeats:NO];
-            //[self performSelector:@selector(doNothing) withObject:nil afterDelay:1.0 ];
-            
-            //[self.Romo3 stopAllMotion];
+        }
+        else
+        {
+            NSLog(@"Saw Red Color... @%d", _sawRedColor);
+            if (_sawRedColor == TRUE)
+            {
+                [self.Romo3 stopDriving];
+            }
         }
     }
     // 2. Romo is climbing...
@@ -225,7 +297,7 @@ double currentMaxRotZ;
             self.isClimbing = true;
             
             [self.Romo3 driveForwardWithSpeed:0.75];
-            //self.Romo.expression = RMCharacterExpressionStruggling;
+            self.Romo.expression = RMCharacterExpressionStruggling;
         }
         
         // 4. Romo is descending...
@@ -235,9 +307,9 @@ double currentMaxRotZ;
             self.isOnTop = false;
             self.isDescending = true;
             
-            [self.Romo3 driveForwardWithSpeed:0.25];
+            [self.Romo3 driveForwardWithSpeed:0.15];
             self.Romo.emotion = RMCharacterEmotionScared;
-            //self.Romo.expression = RMCharacterExpressionScared;
+            self.Romo.expression = RMCharacterExpressionScared;
         }
     }
     
@@ -332,16 +404,18 @@ double currentMaxRotZ;
     dateString = [formatter stringFromDate:[NSDate date]];
     
     //Concatenates outputMSG string and the current time
-    NSString *outputMSG = @"I made it to the top at ";
+    NSString *outputMSG = @"Greetings from Romo at ";
     NSString *outputDate = [outputMSG stringByAppendingString:dateString];
     
     AFHTTPRequestOperationManager *manager = [AFHTTPRequestOperationManager manager];
+    manager.responseSerializer.acceptableContentTypes = [NSSet setWithObject:@"text/html"];
     NSString *sentence = [outputDate stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
     
     NSString *url = [NSString stringWithFormat:@"%s/chunks/%@", BASE_URL, sentence];
     
     NSLog(@"%@", url);
     
+    /*
     [manager GET:url parameters:nil success:^(AFHTTPRequestOperation *operation, id responseObject) {
         NSLog(@"JSON: %@", responseObject);
         
@@ -358,7 +432,325 @@ double currentMaxRotZ;
                                               otherButtonTitles:nil, nil];
         [alert show];
     }];
+     */
     
+    _tokens = [outputDate componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    [self tweetCommands];
+    
+}
+
+- (void)callMongoService {
+    
+    AFHTTPRequestOperationManager *manager = [AFHTTPRequestOperationManager manager];
+    manager.responseSerializer.acceptableContentTypes = [NSSet setWithObject:@"application/json"];
+    NSString *apiKey = @"j-xyG_r8AOd5fKxRNNGlmsS9vradUXAU";
+    NSString *url = [NSString stringWithFormat:@"%s?apiKey=%@", MONGO_URL, apiKey];
+    
+    NSLog(@"Calling MongoDB URL: %@", url);
+    
+    [manager GET:url parameters:nil success:^(AFHTTPRequestOperation *operation,
+        id responseObject)
+    {
+        NSLog(@"JSON: %@", responseObject);
+        NSArray *responses = responseObject;
+        
+        for (id object in responses) {
+            NSDictionary* responseMap = object;
+            NSString* topicVal = [responseMap valueForKey:@"topTopics"];
+            NSLog(@"Topic: %@", topicVal);
+            
+            NSString* tweetVal = [responseMap valueForKey:@"topStatuses"];
+            NSLog(@"Tweet: %@", tweetVal);
+            
+            NSString* placeVal = [responseMap valueForKey:@"topPlaces"];
+            NSLog(@"Place: %@", placeVal);
+            
+            NSString* message;
+            if ([tweetVal containsString:BURGLARY])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Burglary reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:THEFT])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Theft reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:ROBBERY])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Robbery reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:ASSAULT])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Assault reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:BREAKENTER])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Breaking In reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:ARSON])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Arson reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:ARREST])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Arrest reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:VANDALISM])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Vandalism reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:SHOOTING])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Shooting reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+            else if ([tweetVal containsString:OTHER])
+            {
+                message = [NSString stringWithFormat:@"Alert from Romo! Other reported: %@ By: %@, At: %@", tweetVal, topicVal, placeVal];
+            }
+        }
+    }
+    failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+        NSLog(@"Error: %@", error);
+        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Error"
+            message:[error description]
+        delegate:nil
+        cancelButtonTitle:@"Ok"
+        otherButtonTitles:nil, nil];
+        [alert show];
+    }];
+}
+
+- (void)sendTwilioText: (NSString*)message {
+    NSLog(@"Sending Twilio Text request.");
+    
+    // Common constants
+    NSString *kTwilioSID = @"AC58d6371746b89f7e0b89a52492fee638";
+    NSString *kTwilioSecret = @"23613fd085a376bcfdbfe916118c6713";
+    NSString *kFromNumber = @"+18163988624";
+    NSString *kToNumber = @"+1816"; //TODO PHONE NUMBER GOES HERE!
+    
+    NSString *kMessage = [message stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+    
+    // Build request
+    NSString *urlString = [NSString stringWithFormat:@"https://%@:%@@api.twilio.com/2010-04-01/Accounts/%@/SMS/Messages", kTwilioSID, kTwilioSecret, kTwilioSID];
+    NSURL *url = [NSURL URLWithString:urlString];
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
+    [request setURL:url];
+    [request setHTTPMethod:@"POST"];
+    
+    // Set up the body
+    NSString *bodyString = [NSString stringWithFormat:@"From=%@&To=%@&Body=%@", kFromNumber, kToNumber, kMessage];
+    NSData *data = [bodyString dataUsingEncoding:NSUTF8StringEncoding];
+    [request setHTTPBody:data];
+    NSError *error;
+    NSURLResponse *response;
+    NSData *receivedData = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+    
+    // Handle the received data
+    if (error) {
+        NSLog(@"Error: %@", error);
+    } else {
+        NSString *receivedString = [[NSString alloc]initWithData:receivedData encoding:NSUTF8StringEncoding];
+        NSLog(@"Request sent. %@", receivedString);
+    }     
+}
+
+- (void)socket:(GCDAsyncSocket *)sender didAcceptNewSocket:(GCDAsyncSocket *)newSocket
+{
+    @synchronized(_connectedSockets)
+    {
+        [_connectedSockets addObject:newSocket];
+    }
+    
+    NSString *host = [newSocket connectedHost];
+    UInt16 port = [newSocket connectedPort];
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            [self logInfo:FORMAT(@"Accepted client %@:%hu", host, port)];
+        }
+    });
+    
+    /*
+     NSString *welcomeMsg = @"Welcome to the Romo Server\r\n";
+     NSData *welcomeData = [welcomeMsg dataUsingEncoding:NSUTF8StringEncoding];
+     
+     [newSocket writeData:welcomeData withTimeout:-1 tag:WELCOME_MSG];
+     */
+    [newSocket readDataWithTimeout:NO_TIMEOUT tag:0];
+}
+
+- (void)socket:(GCDAsyncSocket *)socket didWriteDataWithTag:(long)tag
+{
+}
+
+- (void)socket:(GCDAsyncSocket *)socket didReadData:(NSData *)data withTag:(long)tag
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            NSData *strData = [data subdataWithRange:NSMakeRange(0, [data length])];
+            NSString *msg = [[NSString alloc] initWithData:strData encoding:NSUTF8StringEncoding];
+            if (msg)
+            {
+                [self logMessage:msg];
+                [self perform:msg:socket];
+            }
+            else
+            {
+                [self logError:@"Error converting the data received into UTF-8"];
+            }
+        }
+    });
+}
+
+- (void)socketDidDisconnect:(GCDAsyncSocket *)socket withError:(NSError *)err
+{
+    if (socket != _listenSocket)
+    {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @autoreleasepool {
+                [self logInfo:FORMAT(@"Client disconnected")];
+            }
+        });
+    }
+    
+    @synchronized(_connectedSockets)
+    {
+        [_connectedSockets removeObject:socket];
+    }
+    
+    isRunning = NO;
+}
+
+- (void)perform:(NSString *)msg :(GCDAsyncSocket*) socket
+{
+    NSLog(@"Calling perform with msg: %@", msg);
+    if ([msg caseInsensitiveCompare:FORWARD] == NSOrderedSame)
+    {
+        // Romo will drive Forward
+        self.Romo.emotion = RMCharacterEmotionExcited;
+        self.Romo.expression = RMCharacterExpressionExcited;
+        [self.Romo3 driveForwardWithSpeed:0.25];
+    }
+    else if([msg caseInsensitiveCompare:BACK] == NSOrderedSame)
+    {
+        // Romo will drive Backwards
+        self.Romo.emotion = RMCharacterEmotionScared;
+        self.Romo.expression = RMCharacterExpressionScared;
+        [self.Romo3 driveBackwardWithSpeed:0.25];
+    }
+    else if([msg caseInsensitiveCompare:LEFT] == NSOrderedSame)
+    {
+        // Romo will drive Left
+        self.Romo.emotion = RMCharacterEmotionDelighted;
+        self.Romo.expression = RMCharacterExpressionDizzy;
+        [self.Romo3 driveWithRadius:-1.0 speed:0.25];
+    }
+    else if ([msg caseInsensitiveCompare:RIGHT] == NSOrderedSame)
+    {
+        // Romo will drive Right
+        self.Romo.emotion = RMCharacterEmotionDelighted;
+        self.Romo.expression = RMCharacterExpressionDizzy;
+        [self.Romo3 driveWithRadius:1.0 speed:0.25];
+    }
+    else if ([msg caseInsensitiveCompare:STOP] == NSOrderedSame)
+    {
+        // Romo will Stop
+        self.Romo.emotion = RMCharacterEmotionSleepy;
+        self.Romo.expression = RMCharacterExpressionExhausted;
+        [self.Romo3 stopAllMotion];
+    }
+    else if ([msg caseInsensitiveCompare:LAUGH] == NSOrderedSame)
+    {
+        self.Romo.emotion = RMCharacterEmotionHappy;
+        // Romo will Laugh
+        self.Romo.expression = RMCharacterExpressionLaugh;
+    }
+    else if ([msg caseInsensitiveCompare:SLOWER]== NSOrderedSame)
+    {
+        [self.Romo3 driveWithPower:0.15];
+    }
+    else if ([msg caseInsensitiveCompare:FASTER]== NSOrderedSame)
+    {
+        [self.Romo3 driveWithPower:0.50];
+    }
+    else if ([msg caseInsensitiveCompare:STOPSIGN]== NSOrderedSame)
+    {
+        _activeSign = _stop;
+    }
+    else if ([msg caseInsensitiveCompare:GOSIGN]== NSOrderedSame)
+    {
+        _activeSign = _go;
+    }
+    else if ([msg caseInsensitiveCompare:LEFTSIGN]== NSOrderedSame)
+    {
+        _activeSign = _turnLeft;
+    }
+    else if ([msg caseInsensitiveCompare:RIGHTSIGN]== NSOrderedSame)
+    {
+        _activeSign = _turnRight;
+    }
+    else if ([msg caseInsensitiveCompare:SLOWSIGN]== NSOrderedSame)
+    {
+        _activeSign = _slowDown;
+    }
+    else if ([msg caseInsensitiveCompare:DNESIGN]== NSOrderedSame)
+    {
+        _activeSign = _doNotEnter;
+    }
+    else if ([msg caseInsensitiveCompare:TWEET]== NSOrderedSame)
+    {
+        [self callNLPService];
+    }
+    else if ([msg caseInsensitiveCompare:OFF]== NSOrderedSame)
+    {
+        [self turnCameraOff];
+        
+    }
+    else if ([msg caseInsensitiveCompare:ON]== NSOrderedSame)
+    {
+        [self turnCameraOn];
+    }
+    else
+    {
+        self.Romo.emotion = RMCharacterEmotionBewildered;
+        self.Romo.expression = RMCharacterExpressionFart;
+    }
+    
+    [socket readDataWithTimeout:NO_TIMEOUT tag:0];
+}
+
+- (void) processMovement: (NSString *) sign {
+    NSLog(@"Calling processMovement with sign: %@", sign);
+    if ([sign caseInsensitiveCompare:_stop] == NSOrderedSame)
+    {
+        NSLog(@"Stop Sign - Stopping All Motion");
+        [self.Romo3 stopAllMotion];
+    }
+    else if ([sign caseInsensitiveCompare:_go] == NSOrderedSame)
+    {
+        NSLog(@"Go Sign - Going...");
+        [self.Romo3 driveForwardWithSpeed:0.25];
+    }
+    else if ([sign caseInsensitiveCompare:_doNotEnter] == NSOrderedSame)
+    {
+        NSLog(@"DNE Sign - Go Back...");
+        [self.Romo3 driveBackwardWithSpeed:0.25];
+    }
+    else if ([sign caseInsensitiveCompare:_turnLeft] == NSOrderedSame)
+    {
+        NSLog(@"Left Sign - Turning Left...");
+        [self.Romo3 driveWithRadius:-1.0 speed:0.25];
+    }
+    else if ([sign caseInsensitiveCompare:_turnRight] == NSOrderedSame)
+    {
+        NSLog(@"Right Sign - Turning Right...");
+        [self.Romo3 driveWithRadius:1.0 speed:0.25];
+    }
+    else if ([sign caseInsensitiveCompare:_slowDown] == NSOrderedSame)
+    {
+        NSLog(@"Slow Sign - Slowing down");
+        [self.Romo3 driveWithPower:0.10];
+    }
 }
 
 #pragma mark - RMCoreDelegate Methods
@@ -375,20 +767,18 @@ double currentMaxRotZ;
         self.Romo.expression = RMCharacterExpressionExcited;
     }
     
-    
     AppDelegate *appDelegate = (AppDelegate *)[[UIApplication sharedApplication] delegate];
     
     self.Romo.emotion = RMCharacterEmotionCurious;
     self.Romo.expression = RMCharacterExpressionTalking;
     
     
-     [self.Romo3 tiltToAngle:90
-     completion:^(BOOL success) {
-     if (success) {
-     NSLog(@"Successfully tilted");
-     } else {
-     NSLog(@"Couldn't tilt to the desired angle");
-     }
+    [self.Romo3 tiltToAngle:90 completion:^(BOOL success) {
+        if (success) {
+            NSLog(@"Successfully tilted");
+        } else {
+            NSLog(@"Couldn't tilt to the desired angle");
+        }
      }];
     
     self.motionManager = [appDelegate sharedMotionManager];
@@ -668,7 +1058,7 @@ double currentMaxRotZ;
      NSLog(@"THE SIGN IS: %@", sign);
      */
     
-    [self didCaptureIplImage:workingCopy:_stop];
+    [self didCaptureIplImage:workingCopy:_activeSign];
 }
 
 
@@ -682,7 +1072,6 @@ static void ReleaseDataCallback(void *info, const void *data, size_t size)
     IplImage *iplImage = (IplImage*)info;
     cvReleaseImage(&iplImage);
 }
-
 
 - (CGImageRef)getCGImageFromIplImage:(IplImage*)iplImage
 {
@@ -749,104 +1138,6 @@ static void ReleaseDataCallback(void *info, const void *data, size_t size)
     return uiImage;
 }
 
-#pragma mark - Captured Ipl Image
-
-
-
-/* DEFAULT CAPTURE IMAGE FROM SUPER CLASS
- - (void)didCaptureIplImage:(IplImage *)iplImage
- {
- IplImage *rgbImage = cvCreateImage(cvGetSize(iplImage), IPL_DEPTH_8U, 3);
- cvCvtColor(iplImage, rgbImage, CV_BGR2RGB);
- cvReleaseImage(&iplImage);
- 
- [self didFinishProcessingImage:rgbImage];
- }
- */
-
-#pragma mark - Color Recognition
-/* BEGIN COLOR RECOGNITION
- - (void)didCaptureIplImage:(IplImage *)iplImage
- {
- //ipl image is in BGR format, it needs to be converted to RGB for display in UIImageView
- IplImage *imgRGB = cvCreateImage(cvGetSize(iplImage), IPL_DEPTH_8U, 3);
- cvCvtColor(iplImage, imgRGB, CV_BGR2RGB);
- Mat matRGB = Mat(imgRGB);
- 
- //ipl imaeg is also converted to HSV; hue is used to find certain color
- IplImage *imgHSV = cvCreateImage(cvGetSize(iplImage), 8, 3);
- cvCvtColor(iplImage, imgHSV, CV_BGR2HSV);
- 
- IplImage *imgThreshed = cvCreateImage(cvGetSize(iplImage), 8, 1);
- 
- //it is important to release all images EXCEPT the one that is going to be passed to
- //the didFinishProcessingImage: method and displayed in the UIImageView
- cvReleaseImage(&iplImage);
- 
- //filter all pixels in defined range, everything in range will be white, everything else
- //is going to be black
- cvInRangeS(imgHSV, cvScalar(_min, 100, 100), cvScalar(_max, 255, 255), imgThreshed);
- 
- cvReleaseImage(&imgHSV);
- 
- Mat matThreshed = Mat(imgThreshed);
- 
- //smooths edges
- cv::GaussianBlur(matThreshed,
- matThreshed,
- cv::Size(9, 9),
- 2,
- 2);
- 
- //debug shows threshold image, otherwise the circles are detected in the
- //threshold image and shown in the RGB image
- if (_debug)
- {
- cvReleaseImage(&imgRGB);
- [self didFinishProcessingImage:imgThreshed];
- }
- else
- {
- vector<Vec3f> circles;
- //get circles
- HoughCircles(matThreshed,
- circles,
- CV_HOUGH_GRADIENT,
- 2,
- matThreshed.rows / 4,
- 150,
- 75,
- 10,
- 150);
- 
- for (size_t i = 0; i < circles.size(); i++)
- {
- cout << "Circle position x = " << (int)circles[i][0] << ", y = " << (int)circles[i][1] << ", radius = " << (int)circles[i][2] << "\n";
- 
- cv::Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
- 
- int radius = cvRound(circles[i][2]);
- 
- circle(matRGB, center, 3, Scalar(0, 255, 0), -1, 8, 0);
- circle(matRGB, center, radius, Scalar(0, 0, 255), 3, 8, 0);
- }
- 
- if (circles.size() >= 1)
- {
- sawRedColor = TRUE;
- }
- 
- //threshed image is not needed any more and needs to be released
- cvReleaseImage(&imgThreshed);
- 
- //imgRGB will be released once it is not needed, the didFinishProcessingImage:
- //method will take care of that
- [self didFinishProcessingImage:imgRGB];
- }
- }
- END COLOR RECOGNITION
- */
-
 #pragma mark - didFinishProcessingImage
 
 
@@ -864,12 +1155,10 @@ static void ReleaseDataCallback(void *info, const void *data, size_t size)
 - (void)didCaptureIplImage:(IplImage *)iplImage
                           :(NSString *)triggerImageURL
 {
-    //    [self.view bringSubviewToFront:self.thumbNailImageView];
-    
     //ipl image is in BGR format, it needs to be converted to RGB for display in UIImageView
     IplImage *imgRGB = cvCreateImage(cvGetSize(iplImage), IPL_DEPTH_8U, 1);
-    //    cvCvtColor(iplImage, imgRGB, CV_BGR2GRAY);
     cvCvtColor(iplImage, imgRGB, CV_BGR2GRAY);
+    
     //it is important to release all images once they are not needed EXCEPT the one
     //that is going to be passed to the didFinishProcessingImage: method and
     //displayed in the UIImageView
@@ -884,12 +1173,7 @@ static void ReleaseDataCallback(void *info, const void *data, size_t size)
                      cv::Size(19, 19),
                      10,
                      10);
-    //Mat img_object = imread( argv[1], CV_LOAD_IMAGE_GRAYSCALE );
-    //Mat img_scene = imread( argv[2], CV_LOAD_IMAGE_GRAYSCALE );
     
-    //Bitmap icon = BitmapFactory.decodeResource(triggerImageURL);
-    
-    //    Mat img_object=imread([imageURL UTF8String], CV_LOAD_IMAGE_GRAYSCALE);
     cv::Mat img_object= cv::imread([triggerImageURL UTF8String], CV_LOAD_IMAGE_GRAYSCALE);
     cv::Mat img_scene = imgRGB;
     
@@ -935,8 +1219,9 @@ static void ReleaseDataCallback(void *info, const void *data, size_t size)
     double max_dist = 0; double min_dist = 100;
     
     //-- Quick calculation of max and min distances between keypoints
-    for( int i = 0; i < descriptors_object.rows; i++ )
-    { double dist = matches[i].distance;
+    for (int i = 0; i < descriptors_object.rows; i++)
+    {
+        double dist = matches[i].distance;
         if( dist < min_dist ) min_dist = dist;
         if( dist > max_dist ) max_dist = dist;
     }
@@ -984,37 +1269,19 @@ static void ReleaseDataCallback(void *info, const void *data, size_t size)
     line( img_matches, scene_corners[2] + cv::Point2f( img_object.cols, 0), scene_corners[3] + cv::Point2f( img_object.cols, 0), cv::Scalar( 0, 255, 0), 4 );
     line( img_matches, scene_corners[3] + cv::Point2f( img_object.cols, 0), scene_corners[0] + cv::Point2f( img_object.cols, 0), cv::Scalar( 0, 255, 0), 4 );
     
-    
     double area = contourArea(scene_corners);
     //printf("-- AREA %.2f", area);
-    if(area > 1000)
+    if(area > 10000)
     {
         std::cout<<"GOT IT !!!!\n Perform your action on object recognition here";
+        [self processMovement:triggerImageURL];
     }
-    //    double floored_scene_x[4], floored_scene_y[4];
-    //
-    //    for(int i=0;i<=3;i++)
-    //    {
-    //        cout<<scene_corners[i] <<img_object.cols;
-    //        floored_scene_x[i]=floor(scene_corners[i].x);
-    //        floored_scene_y[i]=floor(scene_corners[i].y);
-    //    }
-    //
-    
-    //-- Show detected matches
-    //    imshow( "Good Matches & Object detection", img_matches );
-    
-    //    self.thumbNailImageView.image = [self imageWithCVMat:img_matches];
-    //    waitKey(0);
     
     dispatch_async(dispatch_get_main_queue(), ^{
         
         _imageView.image=[self imageWithCVMat:img_matches];
     });
     
-    //    _imageView.image=[UIImage imageNamed:@"hi.jpg"];
-    //imgRGB will be released once it is not needed, the didFinishProcessingImage:
-    //method will take care once it displays the image in UIImageView
     [self didFinishProcessingImage:imgRGB];
 }
 
@@ -1032,18 +1299,19 @@ static void ReleaseDataCallback(void *info, const void *data, size_t size)
     
     CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
     
-    CGImageRef imageRef = CGImageCreate(cvMat.cols,
-                                        // Width
-                                        cvMat.rows,                                     // Height
-                                        8,                                              // Bits per component
-                                        8 * cvMat.elemSize(),                           // Bits per pixel
-                                        cvMat.step[0],                                  // Bytes per row
-                                        colorSpace,                                     // Colorspace
-                                        kCGImageAlphaNone | kCGBitmapByteOrderDefault,  // Bitmap info flags
-                                        provider,                                       // CGDataProviderRef
-                                        NULL,                                           // Decode
-                                        false,                                          // Should interpolate
-                                        kCGRenderingIntentDefault);                     // Intent
+    CGImageRef imageRef = CGImageCreate
+        (cvMat.cols,
+        // Width
+        cvMat.rows,                                     // Height
+        8,                                              // Bits per component
+        8 * cvMat.elemSize(),                           // Bits per pixel
+        cvMat.step[0],                                  // Bytes per row
+        colorSpace,                                     // Colorspace
+        kCGImageAlphaNone | kCGBitmapByteOrderDefault,  // Bitmap info flags
+        provider,                                       // CGDataProviderRef
+        NULL,                                           // Decode
+        false,                                          // Should interpolate
+        kCGRenderingIntentDefault);                     // Intent
     
     UIImage *image = [[UIImage alloc] initWithCGImage:imageRef];
     CGImageRelease(imageRef);
